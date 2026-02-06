@@ -154,7 +154,7 @@ Viewer:   viewer@smartparking.com / viewer123
 
 ## 📊 Data Science Theory Used
 
-See [docs/DATA_SCIENCE_THEORY.md](docs/DATA_SCIENCE_THEORY.md) for comprehensive coverage.
+See [docs/DATA_SCIENCE_THEORY.md](DATA_SCIENCE_THEORY.md) for comprehensive coverage.
 
 ## 📄 License
 
