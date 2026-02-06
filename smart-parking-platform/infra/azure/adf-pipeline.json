@@ -1,0 +1,127 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "description": "Azure Data Factory pipeline for Smart Parking ETL — ingests parking events from PostgreSQL, transforms via Databricks, loads into Azure Synapse for analytics."
+  },
+  "resources": [
+    {
+      "type": "Microsoft.DataFactory/factories/pipelines",
+      "apiVersion": "2018-06-01",
+      "name": "[concat('smart-parking-adf', '/ParkingETL_Daily')]",
+      "properties": {
+        "description": "Daily ETL pipeline: Extract parking events → Transform with aggregation → Load to Synapse star schema",
+        "activities": [
+          {
+            "name": "Extract_Parking_Events",
+            "type": "Copy",
+            "description": "Extract raw parking events from PostgreSQL source",
+            "inputs": [
+              {
+                "referenceName": "PostgreSQL_ParkingEvents",
+                "type": "DatasetReference"
+              }
+            ],
+            "outputs": [
+              {
+                "referenceName": "AzureBlob_RawEvents",
+                "type": "DatasetReference"
+              }
+            ],
+            "typeProperties": {
+              "source": {
+                "type": "PostgreSqlSource",
+                "query": "SELECT * FROM parking_events WHERE timestamp >= CURRENT_DATE - INTERVAL '1 day' AND timestamp < CURRENT_DATE"
+              },
+              "sink": {
+                "type": "BlobSink",
+                "writeBatchSize": 10000
+              }
+            }
+          },
+          {
+            "name": "Transform_Aggregate",
+            "type": "DatabricksNotebook",
+            "description": "Spark notebook: aggregate hourly occupancy, compute KPIs, detect anomalies",
+            "dependsOn": [
+              {
+                "activity": "Extract_Parking_Events",
+                "dependencyConditions": ["Succeeded"]
+              }
+            ],
+            "typeProperties": {
+              "notebookPath": "/parking-etl/transform_occupancy",
+              "baseParameters": {
+                "date": "@pipeline().parameters.processingDate",
+                "input_path": "wasbs://raw-events@parkingstorage.blob.core.windows.net/",
+                "output_path": "wasbs://processed@parkingstorage.blob.core.windows.net/"
+              }
+            }
+          },
+          {
+            "name": "Load_To_Synapse",
+            "type": "Copy",
+            "description": "Load transformed data into Synapse Analytics star schema (fact_parking_events + dimensions)",
+            "dependsOn": [
+              {
+                "activity": "Transform_Aggregate",
+                "dependencyConditions": ["Succeeded"]
+              }
+            ],
+            "inputs": [
+              {
+                "referenceName": "AzureBlob_ProcessedEvents",
+                "type": "DatasetReference"
+              }
+            ],
+            "outputs": [
+              {
+                "referenceName": "Synapse_FactParkingEvents",
+                "type": "DatasetReference"
+              }
+            ],
+            "typeProperties": {
+              "source": {
+                "type": "BlobSource"
+              },
+              "sink": {
+                "type": "SqlDWSink",
+                "allowPolyBase": true,
+                "preCopyScript": "TRUNCATE TABLE staging.fact_parking_events"
+              }
+            }
+          },
+          {
+            "name": "Load_OccupancySnapshots_To_Synapse",
+            "type": "Copy",
+            "description": "Load hourly occupancy snapshots for time-series analytics",
+            "dependsOn": [
+              {
+                "activity": "Transform_Aggregate",
+                "dependencyConditions": ["Succeeded"]
+              }
+            ],
+            "inputs": [
+              {
+                "referenceName": "AzureBlob_OccupancyAggregates",
+                "type": "DatasetReference"
+              }
+            ],
+            "outputs": [
+              {
+                "referenceName": "Synapse_FactOccupancy",
+                "type": "DatasetReference"
+              }
+            ]
+          }
+        ],
+        "parameters": {
+          "processingDate": {
+            "type": "String",
+            "defaultValue": "@utcnow('yyyy-MM-dd')"
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+venv/
+.venv/
+*.egg
+
+# Node
+node_modules/
+.pnp.*
+
+# Environment
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# ML Models (large files)
+ml/models/*.pt
+ml/models/*.h5
+ml/models/*.tflite
+
+# Build
+build/
+frontend/dist/
+
+# Docker
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
